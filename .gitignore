@@ -1,0 +1,9 @@
+/bin/
+/state/
+/config.json
+/.env
+*.test
+*.db
+*.db-shm
+*.db-wal
+.DS_Store

@@ -1,0 +1,25 @@
+[Unit]
+Description=Sing-box subscription composer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=subcompose
+Group=subcompose
+WorkingDirectory=/var/lib/subcompose
+EnvironmentFile=/etc/subcompose/environment
+ExecStart=/usr/local/bin/subcompose -config /etc/subcompose/config.json
+Restart=on-failure
+RestartSec=5s
+StateDirectory=subcompose
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/subcompose
+
+[Install]
+WantedBy=multi-user.target
