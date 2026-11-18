@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -207,11 +208,20 @@ func TestBaseRuleSetsAreMerged(t *testing.T) {
 	}
 }
 
-func TestCheckAcceptsSuccessfulValidator(t *testing.T) {
-	binary := filepath.Join(t.TempDir(), "fake-check")
-	if err := os.WriteFile(binary, []byte("#!/bin/sh\n[ \"$1\" = check ] && [ \"$2\" = -c ] && [ -f \"$3\" ]\n"), 0700); err != nil {
+func writeShellScript(t *testing.T, path, body string) {
+	t.Helper()
+	shell, err := exec.LookPath("sh")
+	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(path, []byte("#!"+shell+"\n"+body), 0700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckAcceptsSuccessfulValidator(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "fake-check")
+	writeShellScript(t, binary, "[ \"$1\" = check ] && [ \"$2\" = -c ] && [ -f \"$3\" ]\n")
 	if err := Check(context.Background(), binary, []byte(`{}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -220,9 +230,7 @@ func TestCheckAcceptsSuccessfulValidator(t *testing.T) {
 func TestCheckRedactsCredentialsAndCleansTempfile(t *testing.T) {
 	dir := t.TempDir()
 	binary := filepath.Join(dir, "fake-check")
-	if err := os.WriteFile(binary, []byte("#!/bin/sh\ncat \"$3\" >&2\nexit 1\n"), 0700); err != nil {
-		t.Fatal(err)
-	}
+	writeShellScript(t, binary, "while IFS= read -r line || [ -n \"$line\" ]; do printf '%s\\n' \"$line\" >&2; done < \"$3\"\nexit 1\n")
 	t.Setenv("TMPDIR", dir)
 	secret := []byte(`{"password":"secret-password"}`)
 	err := Check(context.Background(), binary, secret)

@@ -144,9 +144,13 @@ func TestProductionPolicyRejectsPlainHTTPAndLoopback(t *testing.T) {
 
 func TestBinaryDecompileSanitizesEnvironment(t *testing.T) {
 	t.Setenv("SUBCOMPOSE_TEST_SECRET", "do-not-leak-to-child")
+	shell, err := exec.LookPath("sh")
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "fake-sing-box.sh")
-	program := "#!/bin/sh\nif [ -n \"$SUBCOMPOSE_TEST_SECRET\" ] || [ \"$HOME\" != \"/var/empty\" ]; then\n  exit 1\nfi\nprintf '%s' '{\"version\":3,\"rules\":[{\"domain\":[\"clean.test\"]}]}' > \"$4\"\n"
+	program := "#!" + shell + "\nif [ -n \"$SUBCOMPOSE_TEST_SECRET\" ] || [ \"$HOME\" != \"/var/empty\" ]; then\n  exit 1\nfi\nprintf '%s' '{\"version\":3,\"rules\":[{\"domain\":[\"clean.test\"]}]}' > \"$4\"\n"
 	if err := os.WriteFile(script, []byte(program), 0700); err != nil {
 		t.Fatal(err)
 	}

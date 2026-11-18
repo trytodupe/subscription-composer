@@ -149,12 +149,8 @@ func TestBuildAddsDirectOutboundWhenMissing(t *testing.T) {
 
 func TestCheckScrubsChildEnvironment(t *testing.T) {
 	t.Setenv("SUBCOMPOSE_SECRET_LEAK_PROBE", "sensitive-token")
-	dir := t.TempDir()
-	script := dir + "/fake-sing-box"
-	body := "#!/bin/sh\nif [ -n \"$SUBCOMPOSE_SECRET_LEAK_PROBE\" ] || [ \"$HOME\" != \"/var/empty\" ]; then exit 1; fi\nexit 0\n"
-	if err := os.WriteFile(script, []byte(body), 0700); err != nil {
-		t.Fatal(err)
-	}
+	script := t.TempDir() + "/fake-sing-box"
+	writeShellScript(t, script, "if [ -n \"$SUBCOMPOSE_SECRET_LEAK_PROBE\" ] || [ \"$HOME\" != \"/var/empty\" ]; then exit 1; fi\nexit 0\n")
 	if err := Check(context.Background(), script, []byte(`{}`)); err != nil {
 		t.Fatalf("child environment was not scrubbed: %v", err)
 	}
