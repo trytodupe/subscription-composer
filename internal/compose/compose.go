@@ -29,7 +29,7 @@ func Build(device model.Device, policy model.Policy, nodes []model.Node) ([]byte
 	if err != nil {
 		return nil, fmt.Errorf("local_proxy: %w", err)
 	}
-	if err := addLocalProxyInbounds(base, localProxy); err != nil {
+	if err := addLocalProxyInbounds(base, device.Platform, localProxy); err != nil {
 		return nil, err
 	}
 	guard, err := localProxyGuard(localProxy)
@@ -174,7 +174,15 @@ func Build(device model.Device, policy model.Policy, nodes []model.Node) ([]byte
 		return nil, err
 	}
 	// Explicit direct requests must bypass both infrastructure and policy routes.
-	prefix := []json.RawMessage{json.RawMessage(`{"inbound":["mixed-direct"],"action":"route","outbound":"direct"}`)}
+	directRule, err := json.Marshal(map[string]any{
+		"inbound":  directProxyTags(device.Platform, localProxy),
+		"action":   "route",
+		"outbound": "direct",
+	})
+	if err != nil {
+		return nil, err
+	}
+	prefix := []json.RawMessage{directRule}
 	// The source guard must run before any rule that could route proxy traffic.
 	if guard != nil {
 		prefix = append([]json.RawMessage{guard}, prefix...)

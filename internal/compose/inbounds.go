@@ -8,12 +8,24 @@ import (
 	"github.com/ttd/subscription-composer/internal/model"
 )
 
-var localProxyTags = []string{"mixed-rules", "mixed-direct"}
+var (
+	localProxyTags         = []string{"mixed-rules", "mixed-direct"}
+	loopbackCompanionTags  = []string{"mixed-rules-loopback", "mixed-direct-loopback"}
+	reservedLocalProxyTags = map[string]bool{
+		"mixed-rules":           true,
+		"mixed-direct":          true,
+		"mixed-rules-loopback":  true,
+		"mixed-direct-loopback": true,
+	}
+)
 
 // addLocalProxyInbounds binds the generated proxies to loopback by default.
 // An exposed device listens on every address and relies on the source
-// allowlist rule returned by localProxyGuard.
-func addLocalProxyInbounds(base map[string]json.RawMessage, settings model.LocalProxy) error {
+// allowlist rule returned by localProxyGuard. On macOS, NetworkExtension
+// scopes wildcard listeners inside NEPacketTunnelProvider to the primary
+// physical interface, which breaks local IPv4 loopback handshakes unless an
+// explicit 127.0.0.1 companion listener is also bound on the same port.
+func addLocalProxyInbounds(base map[string]json.RawMessage, platform string, settings model.LocalProxy) error {
 	inbounds, err := array(base, "inbounds")
 	if err != nil {
 		return err
@@ -25,7 +37,7 @@ func addLocalProxyInbounds(base map[string]json.RawMessage, settings model.Local
 		}
 		var tag string
 		_ = json.Unmarshal(inbound["tag"], &tag)
-		if tag == "mixed-rules" || tag == "mixed-direct" {
+		if reservedLocalProxyTags[tag] {
 			return fmt.Errorf("base inbound conflicts with generated tag %s", tag)
 		}
 		var port int
@@ -39,16 +51,33 @@ func addLocalProxyInbounds(base map[string]json.RawMessage, settings model.Local
 		listen = "::"
 	}
 	for i, tag := range localProxyTags {
+		port := 7890 + i
 		inbounds, err = appendJSON(inbounds, map[string]any{
 			"type": "mixed", "tag": tag,
-			"listen": listen, "listen_port": 7890 + i,
+			"listen": listen, "listen_port": port,
 		})
 		if err != nil {
 			return err
 		}
+		if settings.Exposed() && platform == "macos" {
+			inbounds, err = appendJSON(inbounds, map[string]any{
+				"type": "mixed", "tag": loopbackCompanionTags[i],
+				"listen": "127.0.0.1", "listen_port": port,
+			})
+			if err != nil {
+				return err
+			}
+		}
 	}
 	base["inbounds"], err = json.Marshal(inbounds)
 	return err
+}
+
+func directProxyTags(platform string, settings model.LocalProxy) []string {
+	if settings.Exposed() && platform == "macos" {
+		return []string{"mixed-direct", "mixed-direct-loopback"}
+	}
+	return []string{"mixed-direct"}
 }
 
 // localProxyGuard returns the route rule that rejects proxy clients outside

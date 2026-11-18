@@ -40,7 +40,7 @@ func TestLoadRejectsInvalidConfigurationWithoutExposingSecrets(t *testing.T) {
 		strings.Replace(valid, `https://secret-user:secret-password@example.com`, `http://127.0.0.1`, 1),
 		strings.Replace(valid, `"base":{}`, `"local_proxy":{"allow_cidrs":["0.0.0.0/0"]},"base":{}`, 1),
 		strings.Replace(valid, `"base":{}`, `"local_proxy":{"allow_cidrs":["::/0"]},"base":{}`, 1),
-		strings.Replace(valid, `"base":{}`, `"local_proxy":{"allow_cidrs":["172.16.20.1"]},"base":{}`, 1),
+		strings.Replace(valid, `"base":{}`, `"local_proxy":{"allow_cidrs":["192.168.1.1"]},"base":{}`, 1),
 	}
 	for i, body := range cases {
 		path := filepath.Join(t.TempDir(), "config.json")
@@ -58,7 +58,7 @@ func TestLoadRejectsInvalidConfigurationWithoutExposingSecrets(t *testing.T) {
 }
 
 func TestLoadCanonicalizesLocalProxyCIDRs(t *testing.T) {
-	body := `{"sources":[{"id":"airport","file":"nodes.json"}],"devices":[{"id":"phone","platform":"android","token":"a-long-enough-device-token-for-tests","local_proxy":{"allow_tailscale":true,"allow_cidrs":["172.16.20.9/24","172.16.20.0/24"]},"base":{}}]}`
+	body := `{"sources":[{"id":"airport","file":"nodes.json"}],"devices":[{"id":"phone","platform":"android","token":"a-long-enough-device-token-for-tests","local_proxy":{"allow_tailscale":true,"allow_cidrs":["192.168.1.9/24","192.168.1.0/24"]},"base":{}}]}`
 	path := filepath.Join(t.TempDir(), "config.json")
 	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestLoadCanonicalizesLocalProxyCIDRs(t *testing.T) {
 		t.Fatal(err)
 	}
 	lp := cfg.Devices[0].LocalProxy
-	if !lp.AllowTailscale || len(lp.AllowCIDRs) != 1 || lp.AllowCIDRs[0] != "172.16.20.0/24" {
+	if !lp.AllowTailscale || len(lp.AllowCIDRs) != 1 || lp.AllowCIDRs[0] != "192.168.1.0/24" {
 		t.Fatalf("unexpected local_proxy: %+v", lp)
 	}
 }

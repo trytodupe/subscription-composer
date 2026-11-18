@@ -171,6 +171,12 @@ func TestRejectInvalidReferencesAndTags(t *testing.T) {
 		{"reserved inbound tag", func(d *model.Device, _ *model.Policy, _ *[]model.Node) {
 			d.Base = json.RawMessage(`{"inbounds":[{"type":"mixed","tag":"mixed-direct","listen_port":9000}]}`)
 		}},
+		{"reserved loopback rules tag", func(d *model.Device, _ *model.Policy, _ *[]model.Node) {
+			d.Base = json.RawMessage(`{"inbounds":[{"type":"mixed","tag":"mixed-rules-loopback","listen_port":9000}]}`)
+		}},
+		{"reserved loopback direct tag", func(d *model.Device, _ *model.Policy, _ *[]model.Node) {
+			d.Base = json.RawMessage(`{"inbounds":[{"type":"mixed","tag":"mixed-direct-loopback","listen_port":9000}]}`)
+		}},
 		{"reserved policy port", func(d *model.Device, _ *model.Policy, _ *[]model.Node) {
 			d.Base = json.RawMessage(`{"inbounds":[{"type":"http","tag":"custom","listen_port":7890}]}`)
 		}},

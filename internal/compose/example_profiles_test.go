@@ -86,4 +86,31 @@ func TestExampleDeviceProfiles(t *testing.T) {
 			}
 		})
 	}
+	t.Run("macos-exposed-local-proxy", func(t *testing.T) {
+		var macosDevice = cfg.Devices[0]
+		if macosDevice.Platform != "macos" {
+			t.Fatalf("expected first example device to be macos, got %s", macosDevice.Platform)
+		}
+		macosDevice.LocalProxy.AllowTailscale = true
+		macosDevice.LocalProxy.AllowCIDRs = []string{"192.168.1.0/24"}
+		macosDevice.RemoteControl.Listen = "::"
+		data, err := Build(macosDevice, cfg.Policy, nodes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		profile := decode(t, data)
+		inbounds := profile["inbounds"].([]any)
+		if len(inbounds) != 5 {
+			t.Fatalf("expected tun-in plus four dual local proxy listeners, got %d", len(inbounds))
+		}
+		services := profile["services"].([]any)
+		if len(services) != 2 {
+			t.Fatalf("expected dual macOS remote control services, got %d", len(services))
+		}
+		if binary := os.Getenv("SUBCOMPOSE_SING_BOX"); binary != "" {
+			if err := Check(context.Background(), binary, data); err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
 }

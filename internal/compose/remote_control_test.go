@@ -79,6 +79,41 @@ func TestRemoteControlPreservesOtherServicesAndCustomListener(t *testing.T) {
 	}
 }
 
+func TestRemoteControlWildcardListenersAddMacOSLoopbackCompanion(t *testing.T) {
+	secret := strings.Repeat("b", 32)
+	for _, listen := range []string{"::", "0.0.0.0"} {
+		for _, platform := range []string{"macos", "linux"} {
+			t.Run(platform+"/"+listen, func(t *testing.T) {
+				device, policy, nodes := fixture()
+				device.Platform = platform
+				device.RemoteControl = model.RemoteControl{Listen: listen, ListenPort: 9191, Secret: secret}
+				data, err := Build(device, policy, nodes)
+				if err != nil {
+					t.Fatal(err)
+				}
+				services := decode(t, data)["services"].([]any)
+				wantPrimary := map[string]any{
+					"type": "api", "tag": "remote-api",
+					"listen": listen, "listen_port": float64(9191),
+					"secret": secret,
+				}
+				if platform == "macos" {
+					wantLoopback := map[string]any{
+						"type": "api", "tag": "remote-api-loopback",
+						"listen": "127.0.0.1", "listen_port": float64(9191),
+						"secret": secret,
+					}
+					if len(services) != 2 || !reflect.DeepEqual(services[0], wantPrimary) || !reflect.DeepEqual(services[1], wantLoopback) {
+						t.Fatalf("unexpected macOS API services: %v", services)
+					}
+				} else if len(services) != 1 || !reflect.DeepEqual(services[0], wantPrimary) {
+					t.Fatalf("unexpected Linux API services: %v", services)
+				}
+			})
+		}
+	}
+}
+
 func TestRemoteControlRejectsConflicts(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -89,6 +124,8 @@ func TestRemoteControlRejectsConflicts(t *testing.T) {
 		{"native API while disabled", `{"services":[{"type":"api","tag":"custom"}]}`, true},
 		{"reserved tag", `{"services":[{"type":"derp","tag":"remote-api"}]}`, false},
 		{"reserved tag while disabled", `{"services":[{"type":"derp","tag":"remote-api"}]}`, true},
+		{"reserved loopback tag", `{"services":[{"type":"derp","tag":"remote-api-loopback"}]}`, false},
+		{"reserved loopback tag while disabled", `{"services":[{"type":"derp","tag":"remote-api-loopback"}]}`, true},
 		{"duplicate service tag", `{"services":[{"type":"derp","tag":"duplicate"},{"type":"derp","tag":"duplicate"}]}`, false},
 		{"invalid service", `{"services":[null]}`, false},
 		{"missing service type", `{"services":[{"tag":"custom"}]}`, false},

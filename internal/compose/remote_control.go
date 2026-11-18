@@ -33,7 +33,7 @@ func addRemoteControl(base map[string]json.RawMessage, device model.Device) erro
 		}
 		if service["tag"] != nil {
 			tag, err := requiredTag(service)
-			if err != nil || tags[tag] || tag == "remote-api" {
+			if err != nil || tags[tag] || tag == "remote-api" || tag == "remote-api-loopback" {
 				return errors.New("invalid, duplicate or reserved base service tag")
 			}
 			tags[tag] = true
@@ -74,6 +74,16 @@ func addRemoteControl(base map[string]json.RawMessage, device model.Device) erro
 	})
 	if err != nil {
 		return errors.New("cannot encode remote control service")
+	}
+	if device.Platform == "macos" && (settings.Listen == "::" || settings.Listen == "0.0.0.0") {
+		items, err = appendJSON(items, map[string]any{
+			"type": "api", "tag": "remote-api-loopback",
+			"listen": "127.0.0.1", "listen_port": settings.ListenPort,
+			"secret": settings.Secret,
+		})
+		if err != nil {
+			return errors.New("cannot encode remote control service")
+		}
 	}
 	base["services"], err = json.Marshal(items)
 	return err

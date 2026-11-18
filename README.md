@@ -95,7 +95,7 @@ sing-box://import-remote-profile?url=URL_ENCODED_PROFILE_URL#URL_ENCODED_NAME
 
 该链接用于导入地址；不要假定它同时携带或设置了客户端的鉴权字段。
 
-合成器为所有设备自动添加两个 HTTP / SOCKS 混合入口：7890 使用正常分流规则；7891 优先路由到 `direct`，覆盖基础规则与用户规则。默认所有平台都只监听 `127.0.0.1`（见下文 `local_proxy`）。没有 `direct` 出站时自动补充。设备基础配置不得占用这两个端口或 `mixed-rules` / `mixed-direct` 标签；`direct` 标签必须对应原生 direct 出站。7891 指定连接出口，DNS 仍遵循原生解析配置。更新 Remote Profile 并重新加载客户端配置后生效。
+合成器为所有设备自动添加两个 HTTP / SOCKS 混合入口：7890 使用正常分流规则；7891 优先路由到 `direct`，覆盖基础规则与用户规则。默认所有平台都只监听 `127.0.0.1`（见下文 `local_proxy`）。没有 `direct` 出站时自动补充。设备基础配置不得占用这两个端口或 `mixed-rules`、`mixed-direct`、`mixed-rules-loopback`、`mixed-direct-loopback` 标签；`direct` 标签必须对应原生 direct 出站。7891 指定连接出口，DNS 仍遵循原生解析配置。更新 Remote Profile 并重新加载客户端配置后生效。
 
 ```bash
 curl --proxy http://127.0.0.1:7890 https://example.com
@@ -116,6 +116,7 @@ curl --proxy http://127.0.0.1:7891 https://example.com
 ```
 
 - 任一项开启后，7890 / 7891 改为监听 `::`（双栈，IPv4 客户端同样可连接），并在 `route.rules` 最前面插入来源白名单规则，拒绝不在白名单内的客户端。
+- 在 `macos` 平台上，Apple `NEPacketTunnelProvider` 会为扩展进程内的通配监听套接字附加物理网卡作用域（`IFSCOPE`），导致本机 IPv4 `127.0.0.1` 回环握手被内核丢弃；因此 `macos` 开启 `local_proxy` 时，会在同一端口同时生成 `::`（`mixed-rules`、`mixed-direct`）与 `127.0.0.1`（`mixed-rules-loopback`、`mixed-direct-loopback`）两套监听，并将两个直连标签一并写入直连分流规则。Linux 与 Android 无此限制且默认不启用 `SO_REUSEPORT`，保持单个 `::` 监听。另外，若 macOS 上同时将 Tailscale 作为独立的 NetworkExtension 隧道运行，系统内核策略同样会隔离两个隧道扩展之间的 `utun` 监听流量。
 - 白名单固定包含 `127.0.0.0/8` 与 `::1/128`；`allow_tailscale` 追加 `100.64.0.0/10` 与 `fd7a:115c:a1e0::/48`；`allow_cidrs` 中的网段规范化后去重追加。
 - `allow_cidrs` 拒绝无效前缀、`0.0.0.0/0` / `::/0` 这类全量网段以及 IPv4-mapped IPv6 写法；sing-box 匹配前会把 IPv4-mapped 来源还原为 IPv4，请直接写 IPv4 网段。
 - 白名单规则使用 `logical` + `and`，仅作用于两个生成入口。不要改写成带 `invert` 的普通规则：`invert` 会同时反转 `inbound` 条件，从而拒绝 TUN 等所有其他入口的流量。
@@ -139,11 +140,11 @@ composer 通过 `devices[].remote_control` 统一生成原生 `services: [{"type
 }
 ```
 
-`enabled` 不设置时遵循平台默认，可显式设置 `true` / `false`。开启时默认监听 `127.0.0.1`、端口 `9090`；可通过 `listen`（IP 地址）和 `listen_port` 覆盖。需要从其他设备（例如经 Tailscale）远程控制时显式设置 `"listen": "::"`，在支持双栈的系统上可同时通过 IPv4 / IPv6 连接，并在主机防火墙中限制可访问网络。`secret` 开启时必填，加载配置时解析；后续合成不生成随机密钥，重复刷新保持稳定。关闭时不读取密钥引用。迁移现有 API 时沿用原 secret。
+`enabled` 不设置时遵循平台默认，可显式设置 `true` / `false`。开启时默认监听 `127.0.0.1`、端口 `9090`；可通过 `listen`（IP 地址）和 `listen_port` 覆盖。需要从其他设备（例如经局域网或 Tailscale）远程控制时显式设置 `"listen": "::"`，在支持双栈的系统上可同时通过 IPv4 / IPv6 连接，并在主机防火墙中限制可访问网络；`macos` 显式监听 `"::"` 或 `"0.0.0.0"` 时会自动补充同端口、同密钥的 `127.0.0.1` 伴随服务 `remote-api-loopback`，确保 `NEPacketTunnelProvider` 下本机 IPv4 控制连接同样可用。`secret` 开启时必填，加载配置时解析；后续合成不生成随机密钥，重复刷新保持稳定。关闭时不读取密钥引用。迁移现有 API 时沿用原 secret。
 
 该服务使用原生 gRPC / gRPC-Web Bearer 鉴权，API secret 与订阅 Basic / Bearer token 独立。客户端仍使用 HTTPS 下载订阅；控制端连接的是目标设备的 API listener。此配置不自动下载 Dashboard，也不配置额外 Clash HTTP listener；sing-box 1.14.4 的 API service 会启用内部连接追踪和 Clash mode 管理器。
 
-`base.services` 中的其他原生服务保持不变。API 必须统一通过 `remote_control` 配置；base 中已有 `type: api`、使用保留 tag `remote-api` 或与生成 API 共用端口时拒绝发布。开启的新配置需要先配置好环境文件中的 API secrets，再升级 composer。Linux 客户端的旧本机 API 配置迁移和完整回滚见 [Linux 客户端说明](docs/linux-client.md)。
+`base.services` 中的其他原生服务保持不变。API 必须统一通过 `remote_control` 配置；base 中已有 `type: api`、使用保留 tag `remote-api` / `remote-api-loopback` 或与生成 API 共用端口时拒绝发布。开启的新配置需要先配置好环境文件中的 API secrets，再升级 composer。Linux 客户端的旧本机 API 配置迁移和完整回滚见 [Linux 客户端说明](docs/linux-client.md)。
 
 ## 在 Linux CLI 中使用
 
@@ -247,6 +248,7 @@ nix-shell -p go --run 'go test -race ./... && go vet ./...'
 ```bash
 SUBCOMPOSE_SING_BOX=/absolute/path/to/sing-box nix-shell -p go --run 'go test ./internal/compose -run TestNativeRemoteControl -v'
 SUBCOMPOSE_SING_BOX=/absolute/path/to/sing-box nix-shell -p go --run 'go test ./internal/compose -run TestNativeLocalProxySourceGuard -v'
+SUBCOMPOSE_SING_BOX=/absolute/path/to/sing-box nix-shell -p go --run 'go test ./internal/compose -run TestNativeDarwinDualLocalProxyListeners -v'
 SUBCOMPOSE_SING_BOX=/absolute/path/to/sing-box nix-shell -p go --run 'go test ./internal/compose -run TestNativeExampleDNSStartup -v'
 SUBCOMPOSE_SING_BOX=/absolute/path/to/sing-box SUBCOMPOSE_NETWORK_TEST=1 nix-shell -p go --run 'go test ./internal/compose -run TestNativeExampleRuleSetDownloads -v'
 ```

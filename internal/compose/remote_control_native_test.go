@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -42,6 +43,12 @@ func TestNativeRemoteControl(t *testing.T) {
 			content, err := Build(device, model.Policy{}, nodes)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if err := Check(context.Background(), validator, content); err != nil {
+				t.Fatal(err)
+			}
+			if platform == "macos" && runtime.GOOS != "darwin" {
+				t.Skip("macOS dual wildcard and loopback API listeners require Darwin socket semantics")
 			}
 			profile := decode(t, content)
 			// Keep this runtime test independent of the host's proxy ports and TUN.
