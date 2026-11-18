@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/ttd/subscription-composer/internal/authstate"
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func TestAuthImportVerifiesAndPersistsRotation(t *testing.T) {
@@ -20,7 +20,7 @@ func TestAuthImportVerifiesAndPersistsRotation(t *testing.T) {
 	metadata := func(token string) map[string]any {
 		return map[string]any{"site_code": "ikuuu", "user_id": "test-user", "token_type": "app", "is_active": true, "expires_at": expires, "app_token": token}
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer original-test-token" {
 			t.Error("wrong bootstrap credential")
 		}

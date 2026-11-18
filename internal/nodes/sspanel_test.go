@@ -3,6 +3,7 @@ package nodes
 import (
 	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/ttd/subscription-composer/internal/model"
@@ -21,11 +22,17 @@ func TestSSPanelVMessMetadataAndCertificateVerification(t *testing.T) {
 		}
 		link := "vmess://" + base64.StdEncoding.EncodeToString(payload)
 		parsed, err := Parse(model.Source{ID: "panel"}, []byte(link), nil)
+		if !verify {
+			if err == nil || !strings.Contains(err.Error(), "certificate verification") {
+				t.Fatalf("verify_cert false must be rejected, got %v", err)
+			}
+			continue
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
 		tls, ok := parsed[0].Outbound["tls"].(map[string]any)
-		if !ok || tls["insecure"] != !verify {
+		if !ok || tls["insecure"] != false {
 			t.Fatal("certificate verification semantics were lost")
 		}
 		if _, ok := parsed[0].Outbound["class"]; ok {

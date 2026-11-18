@@ -9,7 +9,14 @@
 ```text
 SUBCOMPOSE_MACOS_TOKEN=replace-with-random-token
 SUBCOMPOSE_ANDROID_TOKEN=replace-with-another-random-token
+SUBCOMPOSE_LINUX_TOKEN=replace-with-a-third-random-token
+SUBCOMPOSE_LAPTOP_TOKEN=replace-with-a-fourth-random-token
+SUBCOMPOSE_MACOS_API_SECRET=replace-with-an-independent-macos-api-secret
+SUBCOMPOSE_LINUX_API_SECRET=replace-with-an-independent-linux-api-secret
+SUBCOMPOSE_LAPTOP_API_SECRET=generate-a-separate-random-value-for-laptop
 AIRPORT_SUBSCRIPTION_URL=https://provider.example/subscription
 ```
+
+macOS / Linux（含 laptop）默认在订阅中生成 Remote Control API，Android 默认关闭。先在环境文件中设置配置引用的 API secret，再升级 composer；迁移已有 API 时沿用原 secret。API secret 按设备独立，不能复用订阅令牌。该 listener 运行于下载订阅的客户端，不在订阅服务器上增加监听端口。
 
 模板默认只开放 HTTPS 反向代理，服务本身监听 loopback。若只从 LAN 或 Tailscale 分发，调整监听地址和访问路径，并保留首次导入的恢复方案。首次部署先调用鉴权状态接口和强制刷新接口；`healthz` 只证明进程可响应。

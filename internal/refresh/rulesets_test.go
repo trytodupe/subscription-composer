@@ -5,16 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func TestInlineRuleSetsPersistAndFallbackAcrossRestart(t *testing.T) {
 	var unavailable atomic.Bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/nodes" {
 			_, _ = w.Write([]byte(linkA))
 			return
@@ -58,7 +58,7 @@ func TestInlineRuleSetsPersistAndFallbackAcrossRestart(t *testing.T) {
 }
 
 func TestMissingRuleSetPreventsInitialPublication(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/nodes" {
 			_, _ = w.Write([]byte(linkA))
 			return

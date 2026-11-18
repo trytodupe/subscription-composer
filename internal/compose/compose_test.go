@@ -14,7 +14,8 @@ import (
 )
 
 func fixture() (model.Device, model.Policy, []model.Node) {
-	device := model.Device{ID: "desktop", Base: json.RawMessage(`{
+	disabled := false
+	device := model.Device{ID: "desktop", RemoteControl: model.RemoteControl{Enabled: &disabled}, Base: json.RawMessage(`{
 		"inbounds":[{"type":"tun","tag":"tun-in","interface_name":"tun0"}],
 		"outbounds":[{"type":"direct","tag":"direct"}],
 		"endpoints":[{"type":"tailscale","tag":"ts"}],

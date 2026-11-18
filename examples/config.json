@@ -73,6 +73,9 @@
       "id": "macos",
       "platform": "macos",
       "token": "env:SUBCOMPOSE_MACOS_TOKEN",
+      "remote_control": {
+        "secret": "env:SUBCOMPOSE_MACOS_API_SECRET"
+      },
       "base": {
         "log": {
           "level": "info",
@@ -83,9 +86,108 @@
             "type": "tun",
             "tag": "tun-in",
             "address": [
-              "172.19.0.1/30"
+              "172.19.0.1/30",
+              "fdfe:dcba:9876::1/126"
             ],
             "auto_route": true,
+            "strict_route": false,
+            "mtu": 1500,
+            "stack": "mixed"
+          }
+        ],
+        "outbounds": [
+          {
+            "type": "direct",
+            "tag": "direct"
+          }
+        ],
+        "dns": {
+          "servers": [
+            {
+              "type": "udp",
+              "tag": "bootstrap",
+              "server": "223.5.5.5"
+            },
+            {
+              "type": "local",
+              "tag": "campus-dns"
+            },
+            {
+              "type": "https",
+              "tag": "direct-dns",
+              "server": "dns.alidns.com",
+              "domain_resolver": "bootstrap"
+            },
+            {
+              "type": "https",
+              "tag": "proxy-dns",
+              "server": "cloudflare-dns.com",
+              "domain_resolver": "bootstrap",
+              "detour": "main"
+            }
+          ],
+          "rules": [
+            {
+              "domain_suffix": [
+                "campus.example.edu"
+              ],
+              "action": "route",
+              "server": "campus-dns"
+            },
+            {
+              "rule_set": [
+                "geosite-cn"
+              ],
+              "action": "route",
+              "server": "direct-dns"
+            }
+          ],
+          "final": "proxy-dns"
+        },
+        "route": {
+          "auto_detect_interface": true,
+          "default_domain_resolver": "bootstrap",
+          "rules": [
+            {
+              "action": "sniff"
+            },
+            {
+              "protocol": "dns",
+              "action": "hijack-dns"
+            },
+            {
+              "ip_is_private": true,
+              "action": "route",
+              "outbound": "direct"
+            }
+          ]
+        },
+        "experimental": {
+          "cache_file": {
+            "enabled": true
+          }
+        }
+      }
+    },
+    {
+      "id": "android",
+      "platform": "android",
+      "token": "env:SUBCOMPOSE_ANDROID_TOKEN",
+      "base": {
+        "log": {
+          "level": "info",
+          "timestamp": true
+        },
+        "inbounds": [
+          {
+            "type": "tun",
+            "tag": "tun-in",
+            "address": [
+              "172.19.0.1/30",
+              "fdfe:dcba:9876::1/126"
+            ],
+            "auto_route": true,
+            "strict_route": false,
             "mtu": 1500,
             "stack": "mixed"
           }
@@ -190,9 +292,17 @@
       }
     },
     {
-      "id": "android",
-      "platform": "android",
-      "token": "env:SUBCOMPOSE_ANDROID_TOKEN",
+      "id": "linux",
+      "platform": "linux",
+      "token": "env:SUBCOMPOSE_LINUX_TOKEN",
+      "remote_control": {
+        "secret": "env:SUBCOMPOSE_LINUX_API_SECRET"
+      },
+      "local_proxy": {
+        "allow_cidrs": [
+          "192.168.1.0/24"
+        ]
+      },
       "base": {
         "log": {
           "level": "info",
@@ -203,25 +313,20 @@
             "type": "tun",
             "tag": "tun-in",
             "address": [
-              "172.19.0.1/30"
+              "172.19.0.1/30",
+              "fdfe:dcba:9876::1/126"
             ],
             "auto_route": true,
             "mtu": 1500,
-            "stack": "mixed"
+            "stack": "mixed",
+            "interface_name": "sb-tun",
+            "strict_route": false
           }
         ],
         "outbounds": [
           {
             "type": "direct",
             "tag": "direct"
-          }
-        ],
-        "endpoints": [
-          {
-            "type": "tailscale",
-            "tag": "tailscale",
-            "state_directory": "tailscale",
-            "accept_routes": true
           }
         ],
         "dns": {
@@ -247,19 +352,9 @@
               "server": "cloudflare-dns.com",
               "domain_resolver": "bootstrap",
               "detour": "main"
-            },
-            {
-              "type": "tailscale",
-              "tag": "tailnet-dns",
-              "endpoint": "tailscale"
             }
           ],
           "rules": [
-            {
-              "preferred_by": "tailnet-dns",
-              "action": "route",
-              "server": "tailnet-dns"
-            },
             {
               "domain_suffix": [
                 "campus.example.edu"
@@ -289,11 +384,105 @@
               "action": "hijack-dns"
             },
             {
-              "preferred_by": [
-                "tailscale"
+              "ip_is_private": true,
+              "action": "route",
+              "outbound": "direct"
+            }
+          ]
+        },
+        "experimental": {
+          "cache_file": {
+            "enabled": true
+          }
+        }
+      }
+    },
+    {
+      "id": "laptop",
+      "platform": "linux",
+      "token": "env:SUBCOMPOSE_LAPTOP_TOKEN",
+      "remote_control": {
+        "secret": "env:SUBCOMPOSE_LAPTOP_API_SECRET"
+      },
+      "base": {
+        "log": {
+          "level": "info",
+          "timestamp": true
+        },
+        "inbounds": [
+          {
+            "type": "tun",
+            "tag": "tun-in",
+            "address": [
+              "172.31.255.1/30",
+              "fdfe:dcba:9876::1/126"
+            ],
+            "auto_route": true,
+            "mtu": 1500,
+            "stack": "mixed",
+            "interface_name": "sb-tun",
+            "strict_route": false
+          }
+        ],
+        "outbounds": [
+          {
+            "type": "direct",
+            "tag": "direct"
+          }
+        ],
+        "dns": {
+          "servers": [
+            {
+              "type": "udp",
+              "tag": "bootstrap",
+              "server": "223.5.5.5"
+            },
+            {
+              "type": "local",
+              "tag": "campus-dns"
+            },
+            {
+              "type": "https",
+              "tag": "direct-dns",
+              "server": "dns.alidns.com",
+              "domain_resolver": "bootstrap"
+            },
+            {
+              "type": "https",
+              "tag": "proxy-dns",
+              "server": "cloudflare-dns.com",
+              "domain_resolver": "bootstrap",
+              "detour": "main"
+            }
+          ],
+          "rules": [
+            {
+              "domain_suffix": [
+                "campus.example.edu"
               ],
               "action": "route",
-              "outbound": "tailscale"
+              "server": "campus-dns"
+            },
+            {
+              "rule_set": [
+                "geosite-cn"
+              ],
+              "action": "route",
+              "server": "direct-dns"
+            }
+          ],
+          "final": "proxy-dns"
+        },
+        "route": {
+          "auto_detect_interface": true,
+          "default_domain_resolver": "bootstrap",
+          "rules": [
+            {
+              "action": "sniff"
+            },
+            {
+              "protocol": "dns",
+              "action": "hijack-dns"
             },
             {
               "ip_is_private": true,

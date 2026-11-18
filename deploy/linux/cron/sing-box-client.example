@@ -1,0 +1,5 @@
+SHELL=/bin/sh
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+17 */8 * * * root /usr/local/bin/sing-box-client fetch --config /etc/sing-box-client/client.json --jitter 5m

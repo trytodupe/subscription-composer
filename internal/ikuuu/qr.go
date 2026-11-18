@@ -7,12 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/ttd/subscription-composer/internal/netsafe"
 )
 
 const maxQRResponseBytes = 1 << 20
@@ -122,6 +123,9 @@ func (c QRClient) request(ctx context.Context, operation, method, endpoint strin
 	if c.HTTPClient != nil {
 		client = *c.HTTPClient
 	}
+	if client.Transport == nil {
+		client.Transport = netsafe.DefaultClient().Transport
+	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)
 	if err != nil {
@@ -158,14 +162,8 @@ func (c QRClient) request(ctx context.Context, operation, method, endpoint strin
 
 func qrBaseURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
-	if err != nil || u.Hostname() == "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery || strings.Contains(raw, "?") || u.Fragment != "" || strings.Contains(raw, "#") || u.RawPath != "" {
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery || strings.Contains(raw, "?") || u.Fragment != "" || strings.Contains(raw, "#") || u.RawPath != "" {
 		return nil, errors.New("invalid QR base URL")
-	}
-	if u.Scheme != "https" {
-		ip := net.ParseIP(u.Hostname())
-		if u.Scheme != "http" || (!strings.EqualFold(u.Hostname(), "localhost") && (ip == nil || !ip.IsLoopback())) {
-			return nil, errors.New("invalid QR base URL")
-		}
 	}
 	return u, nil
 }

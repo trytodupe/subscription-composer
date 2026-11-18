@@ -1,0 +1,14 @@
+{
+  "subscription_url": "https://subscriptions.example.com/profiles/linux.json",
+  "username": "linux",
+  "token_file": "/etc/sing-box-client/subscription-token",
+  "state_dir": "/var/lib/sing-box-client",
+  "config_dir": "/etc/sing-box",
+  "local_file": "/etc/sing-box/10-local.json",
+  "subscription_file": "/etc/sing-box/20-subscription.json",
+  "work_dir": "/var/lib/sing-box",
+  "sing_box_binary": "/usr/bin/sing-box",
+  "rc_service_binary": "/usr/bin/rc-service",
+  "service_name": "sing-box",
+  "health_address": "127.0.0.1:9090"
+}

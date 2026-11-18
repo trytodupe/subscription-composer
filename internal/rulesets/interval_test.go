@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func TestExplicitRuleSetIntervalReusesFreshValidatedAsset(t *testing.T) {
 	var hits atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 		_, _ = w.Write([]byte(`{"version":3,"rules":[{"domain_suffix":["example.cn"]}]}`))
 	}))

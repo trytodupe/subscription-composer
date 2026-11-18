@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -13,12 +12,13 @@ import (
 
 	"github.com/ttd/subscription-composer/internal/authstate"
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func TestIkUUUAuthorizedSourceAndRevocationFallback(t *testing.T) {
 	var revoked atomic.Bool
 	var profiles, refreshes atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Header.Get("Authorization") != "Bearer test-app-token" {
 			t.Error("app source did not use stored bearer credential")

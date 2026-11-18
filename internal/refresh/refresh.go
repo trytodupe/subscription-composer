@@ -21,6 +21,7 @@ import (
 	"github.com/ttd/subscription-composer/internal/compose"
 	"github.com/ttd/subscription-composer/internal/ikuuu"
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe"
 	"github.com/ttd/subscription-composer/internal/nodes"
 	"github.com/ttd/subscription-composer/internal/rulesets"
 )
@@ -95,7 +96,7 @@ func New(cfg model.Config) (*Manager, error) {
 		return nil, fmt.Errorf("invalid debounce: %w", err)
 	}
 	m := &Manager{
-		cfg: cfg, client: &http.Client{}, timeout: timeout, debounce: debounce,
+		cfg: cfg, client: netsafe.NewClient(netsafe.DefaultPolicy()), timeout: timeout, debounce: debounce,
 		fingerprints: make(map[string]string), cache: make(map[string]sourceCache),
 		profiles: make(map[string][]byte), ruleSets: make(map[string]rulesets.Cache),
 	}
@@ -111,7 +112,7 @@ func New(cfg model.Config) (*Manager, error) {
 		}
 		if s.URL != "" {
 			u, err := url.Parse(s.URL)
-			if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			if err != nil || u.Hostname() == "" || u.Scheme != "https" {
 				return nil, errors.New("invalid source URL")
 			}
 		}

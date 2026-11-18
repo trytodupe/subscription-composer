@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ttd/subscription-composer/internal/authstate"
+	"github.com/ttd/subscription-composer/internal/netsafe"
 )
 
 const (
@@ -246,6 +247,9 @@ func (c *Client) request(ctx context.Context, session authstate.Session, method,
 	client := http.Client{}
 	if c.HTTPClient != nil {
 		client = *c.HTTPClient
+	}
+	if client.Transport == nil {
+		client.Transport = netsafe.DefaultClient().Transport
 	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)

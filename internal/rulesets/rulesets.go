@@ -1,6 +1,6 @@
 // Package rulesets resolves native remote rule sets on the server before profiles are published.
-// Downloads use the server's default HTTP transport (including HTTP_PROXY); a remote
-// download_detour belongs to the client and does not affect these requests.
+// Downloads use the server's netsafe HTTP client (including operator proxy environment variables);
+// a remote download_detour belongs to the client and does not affect these requests.
 package rulesets
 
 import (
@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe"
 )
 
 const maxAssetBytes = 20 << 20
@@ -147,7 +148,7 @@ func resolveOne(ctx context.Context, r remote, fingerprint, id string, old Cache
 		return cached, errors.New(reason)
 	}
 	parsedURL, urlErr := url.Parse(r.URL)
-	if urlErr != nil || parsedURL.Host == "" || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+	if urlErr != nil || parsedURL.Hostname() == "" || parsedURL.Scheme != "https" {
 		return reject("invalid remote rule set URL")
 	}
 	if len(r.HTTPClient) != 0 && string(bytes.TrimSpace(r.HTTPClient)) != "null" && string(bytes.TrimSpace(r.HTTPClient)) != "{}" {
@@ -175,7 +176,7 @@ func resolveOne(ctx context.Context, r remote, fingerprint, id string, old Cache
 			request.Header.Set("If-Modified-Since", old.Modified)
 		}
 	}
-	response, fetchErr := (&http.Client{Transport: http.DefaultTransport}).Do(request)
+	response, fetchErr := netsafe.DefaultClient().Do(request)
 	if fetchErr != nil {
 		return fail("remote rule set fetch failed")
 	}
@@ -255,6 +256,7 @@ func decodeBinary(ctx context.Context, binary string, body []byte) (json.RawMess
 	}
 	command := exec.CommandContext(ctx, binary, "rule-set", "decompile", "--output", output, input)
 	command.Dir = dir
+	command.Env = []string{"HOME=/var/empty"}
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
 	if err := command.Run(); err != nil {

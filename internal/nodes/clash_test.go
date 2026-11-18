@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ttd/subscription-composer/internal/model"
 )
 
 func TestClashProxies(t *testing.T) {
@@ -86,15 +88,23 @@ proxy-groups:
 
 func TestClashGRPCAndTLSValidation(t *testing.T) {
 	body := `proxies:
-  - {name: node, type: vmess, server: vm.example, port: 443, uuid: id, network: grpc, grpc-opts: {grpc-service-name: svc}, tls: true, servername: front.example, skip-cert-verify: true}
+  - {name: node, type: vmess, server: vm.example, port: 443, uuid: id, network: grpc, grpc-opts: {grpc-service-name: svc}, tls: true, servername: front.example}
 `
 	entries, err := parseClash([]byte(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	vm := entries[0].outbound
-	if vm["transport"].(map[string]any)["service_name"] != "svc" || vm["tls"].(map[string]any)["insecure"] != true || vm["tls"].(map[string]any)["server_name"] != "front.example" {
+	if vm["transport"].(map[string]any)["service_name"] != "svc" || vm["tls"].(map[string]any)["server_name"] != "front.example" {
 		t.Fatal("GRPC and TLS mapping differs")
+	}
+	if _, ok := vm["tls"].(map[string]any)["insecure"]; ok {
+		t.Fatal("absent skip-cert-verify must keep the sing-box default")
+	}
+	insecure := strings.Replace(body, "servername: front.example}", "servername: front.example, skip-cert-verify: true}", 1)
+	_, err = Parse(model.Source{ID: "clash"}, []byte(insecure), nil)
+	if err == nil || !strings.Contains(err.Error(), "certificate verification") {
+		t.Fatalf("expected skip-cert-verify rejection, got %v", err)
 	}
 }
 

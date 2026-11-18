@@ -36,10 +36,27 @@ type Policy struct {
 }
 
 type Device struct {
-	ID       string          `json:"id"`
-	Platform string          `json:"platform"`
-	Token    string          `json:"token"`
-	Base     json.RawMessage `json:"base"`
+	ID            string          `json:"id"`
+	Platform      string          `json:"platform"`
+	Token         string          `json:"token"`
+	RemoteControl RemoteControl   `json:"remote_control,omitempty"`
+	LocalProxy    LocalProxy      `json:"local_proxy,omitempty"`
+	Base          json.RawMessage `json:"base"`
+}
+
+// LocalProxy controls which clients may use the generated mixed proxy listeners.
+// The listeners bind to loopback unless at least one allowance is configured.
+type LocalProxy struct {
+	AllowTailscale bool     `json:"allow_tailscale,omitempty"`
+	AllowCIDRs     []string `json:"allow_cidrs,omitempty"`
+}
+
+// RemoteControl configures the native API service generated for a device.
+type RemoteControl struct {
+	Enabled    *bool  `json:"enabled,omitempty"`
+	Listen     string `json:"listen,omitempty"`
+	ListenPort uint16 `json:"listen_port,omitempty"`
+	Secret     string `json:"secret,omitempty"`
 }
 
 type Node struct {

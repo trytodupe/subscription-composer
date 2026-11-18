@@ -48,8 +48,8 @@ func parseNative(body []byte) ([]entry, error) {
 		if !supportedTypes[typ] {
 			return nil, fmt.Errorf("outbound %d: unsupported native protocol; supported: shadowsocks, vmess, vless, trojan, hysteria2, tuic", i+1)
 		}
-		if hasUnsupportedTopology(outbound) {
-			return nil, fmt.Errorf("outbound %d: detour or domain_resolver references are unsupported in provider nodes", i+1)
+		if err := validateNativeOptions(typ, outbound); err != nil {
+			return nil, fmt.Errorf("outbound %d: %w", i+1, err)
 		}
 		name, err := requireString(outbound, "tag")
 		if err != nil {
@@ -92,43 +92,9 @@ func parseNative(body []byte) ([]entry, error) {
 		if _, err := requireString(outbound, credential); err != nil {
 			return nil, fmt.Errorf("outbound %d: %w", i+1, err)
 		}
-		if transport, ok := outbound["transport"]; ok {
-			if typ == "hysteria2" || typ == "tuic" {
-				return nil, fmt.Errorf("outbound %d: transport is unsupported for QUIC outbounds", i+1)
-			}
-			obj, ok := transport.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("outbound %d: transport must be an object", i+1)
-			}
-			t, ok := obj["type"].(string)
-			if !ok || (t != "ws" && t != "grpc") {
-				return nil, fmt.Errorf("outbound %d: unsupported transport; supported: tcp, ws, grpc", i+1)
-			}
-		}
 		entries = append(entries, entry{name: name, outbound: outbound})
 	}
 	return entries, nil
-}
-
-func hasUnsupportedTopology(value any) bool {
-	switch v := value.(type) {
-	case map[string]any:
-		for key, child := range v {
-			if key == "detour" || key == "domain_resolver" {
-				return true
-			}
-			if hasUnsupportedTopology(child) {
-				return true
-			}
-		}
-	case []any:
-		for _, child := range v {
-			if hasUnsupportedTopology(child) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func validateServerPorts(value any) error {

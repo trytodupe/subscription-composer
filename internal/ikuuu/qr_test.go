@@ -9,8 +9,11 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func testQRSession() QRSession {
@@ -23,7 +26,7 @@ func responseEnvelope(data string) string {
 
 func TestCreateAndPoll(t *testing.T) {
 	session := testQRSession()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "" {
 			t.Error("unexpected authentication")
 		}
@@ -61,7 +64,7 @@ func TestCreateAndPoll(t *testing.T) {
 }
 
 func TestPollKeepsCompletedDataOpaque(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, responseEnvelope(`{"status":"complete","unknown":{"future":true}}`))
 	}))
 	defer server.Close()
@@ -73,7 +76,7 @@ func TestPollKeepsCompletedDataOpaque(t *testing.T) {
 
 func TestRejectInvalidBaseURLs(t *testing.T) {
 	for _, base := range []string{
-		"", "http://example.org/api/v2", "http://192.0.2.1/api/v2", "ftp://example.org", "https://user:secret@example.org/api/v2", "https://example.org/api/v2?poll_token=secret", "https://example.org/api/v2#secret", "https://example.org/api/v2#", "https://example.org/api/v2?", "https://example.org/api%2fv2",
+		"", "http://example.org/api/v2", "http://127.0.0.1:8080/api/v2", "http://localhost:8080/api/v2", "http://[::1]:8080/api/v2", "http://192.0.2.1/api/v2", "ftp://example.org", "https://user:secret@example.org/api/v2", "https://example.org/api/v2?poll_token=secret", "https://example.org/api/v2#secret", "https://example.org/api/v2#", "https://example.org/api/v2?", "https://example.org/api%2fv2",
 	} {
 		t.Run(base, func(t *testing.T) {
 			_, err := (QRClient{BaseURL: base}).Create(context.Background())
@@ -82,7 +85,7 @@ func TestRejectInvalidBaseURLs(t *testing.T) {
 			}
 		})
 	}
-	for _, base := range []string{"http://localhost:8080/api/v2", "http://127.0.0.2/api/v2", "http://[::1]:8080/api/v2", "https://example.org/api/v2"} {
+	for _, base := range []string{"https://example.org/api/v2", "https://example.org:8443/api/v2"} {
 		if _, err := qrBaseURL(base); err != nil {
 			t.Fatalf("valid base rejected: %v", err)
 		}
@@ -90,7 +93,7 @@ func TestRejectInvalidBaseURLs(t *testing.T) {
 }
 
 func TestRejectInvalidAndExpiredSessions(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("invalid session reached server")
 	}))
 	defer server.Close()
@@ -125,7 +128,7 @@ func TestRejectMalformedCreateData(t *testing.T) {
 		session := valid
 		mutation(&session)
 		data, _ := json.Marshal(session)
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, responseEnvelope(string(data)))
 		}))
 		_, err := (QRClient{BaseURL: server.URL}).Create(context.Background())
@@ -153,7 +156,7 @@ func TestErrorsAreRedactedAndResponsesBounded(t *testing.T) {
 		{http.StatusOK, `{"success":true,"code":"SUCCESS","data":{}} trailing`, "INVALID_RESPONSE"},
 		{http.StatusOK, strings.Repeat("x", maxQRResponseBytes+1), "INVALID_RESPONSE"},
 	} {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(tc.status)
 			fmt.Fprint(w, tc.body)
 		}))
@@ -173,11 +176,11 @@ func TestErrorsAreRedactedAndResponsesBounded(t *testing.T) {
 
 func TestRedirectNeverFollowed(t *testing.T) {
 	var followed bool
-	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	destination := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		followed = true
 	}))
 	defer destination.Close()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, destination.URL+"/received?poll_token=secret", http.StatusTemporaryRedirect)
 	}))
 	defer server.Close()
@@ -193,7 +196,7 @@ func TestRedirectNeverFollowed(t *testing.T) {
 }
 
 func TestCreateErrorUsesActualHTTPStatus(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		fmt.Fprint(w, responseEnvelope(`{}`))
 	}))
@@ -206,7 +209,7 @@ func TestCreateErrorUsesActualHTTPStatus(t *testing.T) {
 }
 
 func TestCanceledContext(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("canceled request reached server")
 	}))
 	defer server.Close()
@@ -232,5 +235,14 @@ func TestTransportErrorsAreRedacted(t *testing.T) {
 	_, err := client.Poll(context.Background(), testQRSession())
 	if err == nil || strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "example.org") {
 		t.Fatalf("transport detail leaked: %v", err)
+	}
+}
+
+func TestQRProductionPolicyRejectsLoopback(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hits.Add(1) }))
+	defer server.Close()
+	if _, err := (QRClient{BaseURL: server.URL}).Create(context.Background()); err == nil || hits.Load() != 0 {
+		t.Fatalf("default policy dialed loopback: err=%v hits=%d", err, hits.Load())
 	}
 }

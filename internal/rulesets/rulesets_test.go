@@ -9,7 +9,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func entry(url, format string) json.RawMessage {
@@ -21,7 +24,7 @@ func TestSourceConditionalFallbackAndRestart(t *testing.T) {
 	body := `{"version":3,"rules":[{"domain_suffix":["example.cn"]}]}`
 	fail := false
 	var conditional bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if fail {
 			http.Error(w, "private upstream failure", http.StatusServiceUnavailable)
 			return
@@ -67,7 +70,7 @@ func TestSourceConditionalFallbackAndRestart(t *testing.T) {
 
 func TestMalformedSourceNeverPublished(t *testing.T) {
 	malformed := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if malformed {
 			w.Write([]byte(`{"version":3,"rules":["invalid"]}`))
 			return
@@ -116,10 +119,43 @@ func TestBinaryDecompile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(body) }))
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(body) }))
 	defer server.Close()
 	resolved, cache, _, err := Resolve(context.Background(), []json.RawMessage{entry(server.URL, "binary")}, nil, binary)
 	if err != nil || !strings.Contains(string(resolved[0]), "example.cn") || string(cache["cn"].Body) != string(body) {
 		t.Fatalf("binary resolve: %s, %v", resolved, err)
+	}
+}
+
+func TestProductionPolicyRejectsPlainHTTPAndLoopback(t *testing.T) {
+	if _, _, _, err := Resolve(context.Background(), []json.RawMessage{entry("http://example.com/set.json", "source")}, nil, ""); err == nil {
+		t.Fatal("plain HTTP rule-set URL was accepted")
+	}
+	var hits atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(`{"version":3,"rules":[{"domain":["valid.test"]}]}`))
+	}))
+	defer server.Close()
+	if _, _, _, err := Resolve(context.Background(), []json.RawMessage{entry(server.URL, "source")}, nil, ""); err == nil || hits.Load() != 0 {
+		t.Fatalf("default policy dialed loopback: err=%v hits=%d", err, hits.Load())
+	}
+}
+
+func TestBinaryDecompileSanitizesEnvironment(t *testing.T) {
+	t.Setenv("SUBCOMPOSE_TEST_SECRET", "do-not-leak-to-child")
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-sing-box.sh")
+	program := "#!/bin/sh\nif [ -n \"$SUBCOMPOSE_TEST_SECRET\" ] || [ \"$HOME\" != \"/var/empty\" ]; then\n  exit 1\nfi\nprintf '%s' '{\"version\":3,\"rules\":[{\"domain\":[\"clean.test\"]}]}' > \"$4\"\n"
+	if err := os.WriteFile(script, []byte(program), 0700); err != nil {
+		t.Fatal(err)
+	}
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("srs-bytes"))
+	}))
+	defer server.Close()
+	resolved, _, _, err := Resolve(context.Background(), []json.RawMessage{entry(server.URL, "binary")}, nil, script)
+	if err != nil || !strings.Contains(string(resolved[0]), "clean.test") {
+		t.Fatalf("sanitized decompile failed: %s, %v", resolved, err)
 	}
 }

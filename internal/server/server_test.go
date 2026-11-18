@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 	"github.com/ttd/subscription-composer/internal/refresh"
 )
 
@@ -36,7 +37,7 @@ func request(h http.Handler, method, path string, auth bool) *httptest.ResponseR
 
 func TestAuthenticatedProfileRefreshAndForce(t *testing.T) {
 	var hits atomic.Int32
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	up := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 		_, _ = w.Write([]byte(`{"type":"shadowsocks","tag":"JP One","server":"198.51.100.1","server_port":8388,"method":"aes-256-gcm","password":"secret"}`))
 	}))
@@ -81,7 +82,7 @@ func TestAuthenticatedProfileRefreshAndForce(t *testing.T) {
 }
 
 func TestUnavailableProfileIsExplicit(t *testing.T) {
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "private-upstream-body", 502) }))
+	up := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "private-upstream-body", 502) }))
 	defer up.Close()
 	h := testService(t, up.URL)
 	w := request(h, "GET", "/profiles/phone.json", true)

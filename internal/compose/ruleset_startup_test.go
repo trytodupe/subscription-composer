@@ -44,6 +44,8 @@ func TestNativeExampleRuleSetDownloads(t *testing.T) {
 	}
 	service.Policy.RuleSets = resolved
 	device := service.Devices[0]
+	// This test exercises rule-set startup without opening a management listener.
+	device.RemoteControl.Enabled = boolPointer(false)
 	base := decode(t, device.Base)
 	base["inbounds"] = []any{}
 	delete(base, "endpoints")

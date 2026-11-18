@@ -38,8 +38,8 @@ func TestLinks(t *testing.T) {
 				t.Fatal(o)
 			}
 		}},
-		{"Hysteria2 TLS obfs bandwidth", "hy2://user:" + "pass" + "@hy.example:443?sni=front.example&insecure=1&obfs=salamander&obfs-password=" + "obfuscation" + "&upmbps=100&downmbps=250#DE%20Node", "hysteria2", "DE", func(t *testing.T, o map[string]any) {
-			if o["password"] != "user:pass" || o["up_mbps"] != 100 || o["down_mbps"] != 250 || o["obfs"].(map[string]any)["password"] != "obfuscation" || o["tls"].(map[string]any)["insecure"] != true {
+		{"Hysteria2 TLS obfs bandwidth", "hy2://user:" + "pass" + "@hy.example:443?sni=front.example&insecure=0&obfs=salamander&obfs-password=" + "obfuscation" + "&upmbps=100&downmbps=250#DE%20Node", "hysteria2", "DE", func(t *testing.T, o map[string]any) {
+			if o["password"] != "user:pass" || o["up_mbps"] != 100 || o["down_mbps"] != 250 || o["obfs"].(map[string]any)["password"] != "obfuscation" || o["tls"].(map[string]any)["insecure"] != false {
 				t.Fatal(o)
 			}
 		}},

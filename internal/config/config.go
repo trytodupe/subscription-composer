@@ -94,13 +94,11 @@ func Load(path string) (model.Config, error) {
 				return cfg, fmt.Errorf("source %s URL: %w", s.ID, err)
 			}
 			u, e := url.Parse(s.URL)
-			if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.Fragment != "" {
-				return cfg, fmt.Errorf("source %s requires an HTTP(S) URL without a fragment", s.ID)
+			if e != nil || u.Scheme != "https" || u.Hostname() == "" || u.Fragment != "" {
+				return cfg, fmt.Errorf("source %s requires an HTTPS URL without a fragment", s.ID)
 			}
 			if s.Type == "ikuuu" {
-				ip := net.ParseIP(u.Hostname())
-				loopback := u.Hostname() == "localhost" || (ip != nil && ip.IsLoopback())
-				if u.User != nil || u.RawQuery != "" || u.ForceQuery || (u.Scheme != "https" && !loopback) || strings.Trim(u.Path, "/") == "" {
+				if u.User != nil || u.RawQuery != "" || u.ForceQuery || strings.Trim(u.Path, "/") == "" {
 					return cfg, fmt.Errorf("source %s requires a secure API base URL without credentials or query", s.ID)
 				}
 			}
@@ -125,14 +123,15 @@ func Load(path string) (model.Config, error) {
 		}
 	}
 	devices, tokens := map[string]bool{}, map[string]bool{}
+	apiSecrets := map[string]bool{}
 	for i := range cfg.Devices {
 		d := &cfg.Devices[i]
 		if !identifier.MatchString(d.ID) || devices[d.ID] {
 			return cfg, errors.New("device IDs must be unique identifiers")
 		}
 		devices[d.ID] = true
-		if d.Platform != "macos" && d.Platform != "android" {
-			return cfg, fmt.Errorf("device %s platform must be macos or android", d.ID)
+		if d.Platform != "macos" && d.Platform != "android" && d.Platform != "linux" {
+			return cfg, fmt.Errorf("device %s platform must be macos, android or linux", d.ID)
 		}
 		if d.Token, err = secret(d.Token); err != nil {
 			return cfg, fmt.Errorf("device %s token: %w", d.ID, err)
@@ -141,9 +140,33 @@ func Load(path string) (model.Config, error) {
 			return cfg, errors.New("device tokens must be unique and at least 24 bytes")
 		}
 		tokens[d.Token] = true
+		if d.RemoteControl.IsEnabled(d.Platform) {
+			resolved, e := secret(d.RemoteControl.Secret)
+			if e != nil {
+				return cfg, fmt.Errorf("device %s remote control secret: %w", d.ID, e)
+			}
+			d.RemoteControl.Secret = resolved
+		}
+		if d.RemoteControl, err = d.RemoteControl.Resolved(d.Platform); err != nil {
+			return cfg, fmt.Errorf("device %s: %w", d.ID, err)
+		}
+		if d.RemoteControl.IsEnabled(d.Platform) {
+			if apiSecrets[d.RemoteControl.Secret] {
+				return cfg, errors.New("remote control secrets must be unique per device")
+			}
+			apiSecrets[d.RemoteControl.Secret] = true
+		}
+		if d.LocalProxy, err = d.LocalProxy.Resolved(); err != nil {
+			return cfg, fmt.Errorf("device %s local_proxy: %w", d.ID, err)
+		}
 		var base map[string]json.RawMessage
 		if json.Unmarshal(d.Base, &base) != nil || base == nil {
 			return cfg, fmt.Errorf("device %s base must be a native sing-box object", d.ID)
+		}
+	}
+	for value := range apiSecrets {
+		if tokens[value] {
+			return cfg, errors.New("remote control secrets must differ from subscription tokens")
 		}
 	}
 	return cfg, nil

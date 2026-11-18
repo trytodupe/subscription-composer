@@ -25,7 +25,18 @@ func Build(device model.Device, policy model.Policy, nodes []model.Node) ([]byte
 	if err != nil {
 		return nil, fmt.Errorf("base: %w", err)
 	}
-	if err := addLocalProxyInbounds(base); err != nil {
+	localProxy, err := device.LocalProxy.Resolved()
+	if err != nil {
+		return nil, fmt.Errorf("local_proxy: %w", err)
+	}
+	if err := addLocalProxyInbounds(base, localProxy); err != nil {
+		return nil, err
+	}
+	guard, err := localProxyGuard(localProxy)
+	if err != nil {
+		return nil, fmt.Errorf("local_proxy: %w", err)
+	}
+	if err := addRemoteControl(base, device); err != nil {
 		return nil, err
 	}
 	outbounds, err := array(base, "outbounds")
@@ -163,7 +174,12 @@ func Build(device model.Device, policy model.Policy, nodes []model.Node) ([]byte
 		return nil, err
 	}
 	// Explicit direct requests must bypass both infrastructure and policy routes.
-	rules = append([]json.RawMessage{json.RawMessage(`{"inbound":["mixed-direct"],"action":"route","outbound":"direct"}`)}, rules...)
+	prefix := []json.RawMessage{json.RawMessage(`{"inbound":["mixed-direct"],"action":"route","outbound":"direct"}`)}
+	// The source guard must run before any rule that could route proxy traffic.
+	if guard != nil {
+		prefix = append([]json.RawMessage{guard}, prefix...)
+	}
+	rules = append(prefix, rules...)
 	for _, rule := range policy.Rules {
 		if _, err := object(rule); err != nil {
 			return nil, errors.New("policy rule must be an object")
@@ -304,6 +320,8 @@ func Check(ctx context.Context, binary string, config []byte) error {
 		return errors.New("cannot close temporary configuration")
 	}
 	cmd := exec.CommandContext(ctx, binary, "check", "-c", file.Name())
+	// Service secrets are passed through the environment and must not reach the child.
+	cmd.Env = []string{"HOME=/var/empty"}
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	if err := cmd.Run(); err != nil {

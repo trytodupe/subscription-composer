@@ -81,6 +81,18 @@ x-client-custom:
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The DNS probe does not depend on fixed proxy ports used by the host.
+	profile := decode(t, config)
+	for _, raw := range profile["inbounds"].([]any) {
+		inbound := raw.(map[string]any)
+		if inbound["tag"] == "mixed-rules" || inbound["tag"] == "mixed-direct" {
+			inbound["listen_port"] = 0
+		}
+	}
+	config, err = json.Marshal(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := Check(ctx, binary, config); err != nil {

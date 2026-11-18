@@ -2,14 +2,15 @@ package server
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func TestProfileFallsBackWithExplicitStaleHeaders(t *testing.T) {
 	var offline atomic.Bool
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	up := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if offline.Load() {
 			http.Error(w, "upstream failure", http.StatusBadGateway)
 			return

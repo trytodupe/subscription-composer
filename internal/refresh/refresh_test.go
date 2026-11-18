@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 const linkA = "vless://12345678-1234-1234-1234-123456789abc@example.com:443?security=none#US-node"
@@ -49,7 +50,7 @@ func TestCoalescingCancellationAndDebounce(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var count atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if count.Add(1) == 1 {
 			close(started)
 			<-release
@@ -89,7 +90,7 @@ func TestCoalescingCancellationAndDebounce(t *testing.T) {
 func TestValidatorsFallbackAndTimestamps(t *testing.T) {
 	var mode atomic.Int32
 	var conditional atomic.Bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer secret" {
 			t.Error("auth header missing")
 		}
@@ -237,7 +238,7 @@ func TestAtomicGenerationAndRecovery(t *testing.T) {
 
 func TestNoSecretInError(t *testing.T) {
 	secret := "secret-password-value"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(secret))
 	}))
@@ -252,7 +253,7 @@ func TestNoSecretInError(t *testing.T) {
 
 func TestParallelBoundedFetch(t *testing.T) {
 	var inFlight, maxInFlight atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := inFlight.Add(1)
 		for {
 			old := maxInFlight.Load()
@@ -348,5 +349,21 @@ func TestRejectInvalidSnapshotAndOversizeSource(t *testing.T) {
 	}
 	if _, err := New(cfg); err == nil {
 		t.Fatal("invalid snapshot was accepted")
+	}
+}
+
+func TestProductionPolicyRejectsLoopbackAndPlainHTTP(t *testing.T) {
+	if _, err := New(testConfig(t.TempDir(), model.Source{ID: "a", URL: "http://example.com/sub"})); err == nil {
+		t.Fatal("plain HTTP source URL was accepted")
+	}
+	var hits atomic.Int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(linkA))
+	}))
+	defer srv.Close()
+	m := newManager(t, testConfig(t.TempDir(), model.Source{ID: "a", URL: srv.URL}))
+	if err := m.Refresh(context.Background(), true); err == nil || hits.Load() != 0 {
+		t.Fatalf("default policy dialed loopback: err=%v hits=%d", err, hits.Load())
 	}
 }

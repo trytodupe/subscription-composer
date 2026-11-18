@@ -8,13 +8,13 @@ import (
 )
 
 func TestIkUUUSourceConfigurationValidation(t *testing.T) {
-	base := `{"sources":[{"id":"official","type":"ikuuu","url":"https://api.example/api/v2","format":"clash"}],"devices":[{"id":"mac","platform":"macos","token":"a-valid-device-token-for-test-use","base":{}}]}`
+	base := `{"sources":[{"id":"official","type":"ikuuu","url":"https://api.example/api/v2","format":"clash"}],"devices":[{"id":"mac","platform":"macos","token":"a-valid-device-token-for-test-use","remote_control":{"enabled":false},"base":{}}]}`
 	cases := []struct {
 		name, body string
 		valid      bool
 	}{
 		{"secure API", base, true},
-		{"loopback development", strings.Replace(base, "https://api.example", "http://127.0.0.1:8081", 1), true},
+		{"plain HTTP loopback", strings.Replace(base, "https://api.example", "http://127.0.0.1:8081", 1), false},
 		{"insecure public API", strings.Replace(base, "https://api.example", "http://api.example", 1), false},
 		{"credentials in API URL", strings.Replace(base, "https://api.example", "https://user:private-value@api.example", 1), false},
 		{"query on API base", strings.Replace(base, "/api/v2\"", "/api/v2?token=private-value\"", 1), false},

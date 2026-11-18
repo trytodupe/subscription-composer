@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ttd/subscription-composer/internal/authstate"
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func clientStore(t *testing.T) *authstate.Store {
@@ -38,7 +39,7 @@ func tokenResponse(token string) string {
 func TestImportVerifiesPersistsAndRotates(t *testing.T) {
 	store := clientStore(t)
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer old-secret" || r.URL.RawQuery != "" {
 			t.Error("incorrect token authentication or query")
 		}
@@ -82,7 +83,7 @@ func TestFetchConcurrentRefreshAndRestart(t *testing.T) {
 	var refreshes atomic.Int32
 	var profiles atomic.Int32
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v2/client-auth/refresh-app-token":
 			refreshes.Add(1)
@@ -133,7 +134,7 @@ func TestFetchProfile401RotatesOnceAndPersistsOnFailure(t *testing.T) {
 	var refreshes atomic.Int32
 	var profiles atomic.Int32
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v2/nodes/profile":
 			profiles.Add(1)
@@ -181,7 +182,7 @@ func TestFetchRejectsWrongBaseAndMissingSession(t *testing.T) {
 		t.Fatalf("missing session: %v", err)
 	}
 	var received atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1) }))
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1) }))
 	defer server.Close()
 	if err := store.Save("source_1", clientSession(server.URL+"/api/v2", "secret")); err != nil {
 		t.Fatal(err)
@@ -199,7 +200,7 @@ func TestFetchRejectsWrongBaseAndMissingSession(t *testing.T) {
 func TestRefreshFailureKeepsLastKnownToken(t *testing.T) {
 	store := clientStore(t)
 	var refreshes atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v2/client-auth/refresh-app-token" {
 			t.Error("unexpected endpoint")
 		}
@@ -227,7 +228,7 @@ func TestImportPreservesDeviceAndDoesNotRetryAmbiguousPOST(t *testing.T) {
 	store := clientStore(t)
 	var posts atomic.Int32
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v2/client-auth/token-info" {
 			fmt.Fprint(w, tokenResponse("old-secret"))
 			return
@@ -256,9 +257,9 @@ func TestImportPreservesDeviceAndDoesNotRetryAmbiguousPOST(t *testing.T) {
 func TestRedirectIsNotFollowed(t *testing.T) {
 	store := clientStore(t)
 	var received atomic.Int32
-	dest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1) }))
+	dest := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1) }))
 	defer dest.Close()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, dest.URL+"/stolen", http.StatusTemporaryRedirect)
 	}))
 	defer server.Close()
@@ -299,7 +300,7 @@ func TestAmbiguousRefreshTransportFailure(t *testing.T) {
 
 func TestProfileResponseBoundAndNoSecretInErrors(t *testing.T) {
 	store := clientStore(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, strings.Repeat("s", maxClientResponseBytes+1))
 	}))
 	defer server.Close()
@@ -314,7 +315,7 @@ func TestProfileResponseBoundAndNoSecretInErrors(t *testing.T) {
 
 func TestImportRejectsRevokedTokenWithoutSaving(t *testing.T) {
 	store := clientStore(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, `{"success":false,"code":"TOKEN_INVALID","msg":"private-secret"}`)
 	}))
@@ -332,7 +333,7 @@ func TestProfile401AfterRefreshRequiresLoginWithoutLoop(t *testing.T) {
 	store := clientStore(t)
 	var refreshes atomic.Int32
 	var profiles atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v2/client-auth/refresh-app-token" {
 			refreshes.Add(1)
 			fmt.Fprint(w, tokenResponse("new-secret"))
@@ -355,5 +356,23 @@ func TestProfile401AfterRefreshRequiresLoginWithoutLoop(t *testing.T) {
 	stored, err := store.Load("source_1")
 	if err != nil || stored.AppToken != "new-secret" {
 		t.Fatalf("rotated credential missing: %v, %+v", err, stored)
+	}
+}
+
+func TestClientProductionPolicyRejectsLoopbackAndPlainHTTP(t *testing.T) {
+	store := clientStore(t)
+	if _, err := (&Client{Store: store}).Fetch(context.Background(), "source_1", "http://127.0.0.1:8080/api/v2"); err == nil {
+		t.Fatal("plain HTTP loopback URL was accepted")
+	}
+	var hits atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hits.Add(1) }))
+	defer server.Close()
+	session := clientSession(server.URL+"/api/v2", "secret")
+	session.DeviceID, session.DeviceName = "id", "name"
+	if err := store.Save("source_1", session); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Client{Store: store}).Fetch(context.Background(), "source_1", session.APIBaseURL); err == nil || hits.Load() != 0 {
+		t.Fatalf("default policy dialed loopback: err=%v hits=%d", err, hits.Load())
 	}
 }

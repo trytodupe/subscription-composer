@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/ttd/subscription-composer/internal/model"
+	"github.com/ttd/subscription-composer/internal/netsafe/netsafetest"
 )
 
 func TestSourceDNSUpdateAndSnapshotFallback(t *testing.T) {
 	var mode atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := netsafetest.NewServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resolver := "https://first-dns.example/dns-query"
 		switch mode.Load() {
 		case 1:

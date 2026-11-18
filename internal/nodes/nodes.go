@@ -54,7 +54,10 @@ func Parse(source model.Source, body []byte, overrides map[string]string) ([]mod
 	}
 	nodes := make([]model.Node, 0, len(entries))
 	seen := make(map[string]bool, len(entries))
-	for _, e := range entries {
+	for i, e := range entries {
+		if err := validateNodeSafety(e); err != nil {
+			return nil, fmt.Errorf("node %d: %w", i+1, err)
+		}
 		name := e.name
 		if strings.TrimSpace(name) == "" {
 			return nil, errors.New("node name is required for stable identity")

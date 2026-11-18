@@ -1,0 +1,2 @@
+SINGBOX_CONFIG="/etc/sing-box"
+SINGBOX_WORKDIR="/var/lib/sing-box"
